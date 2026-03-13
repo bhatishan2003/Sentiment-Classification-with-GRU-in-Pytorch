@@ -1,0 +1,6 @@
+nltk
+numpy
+pre-commit
+ruff
+torch
+tqdm
