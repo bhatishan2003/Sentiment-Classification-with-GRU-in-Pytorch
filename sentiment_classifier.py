@@ -1,378 +1,261 @@
 import argparse
 import os
-import random
-import string
-from collections import Counter
-import nltk
 import torch
 import torch.nn as nn
 from torch.utils.data import Dataset, DataLoader
-from torch.nn.utils.rnn import pad_sequence
-from tqdm import tqdm
-from nltk.corpus import movie_reviews, stopwords
+from datasets import load_dataset
+from collections import Counter
 from nltk.tokenize import word_tokenize
+import nltk
+import gensim.downloader as api
+import pickle
+
+nltk.download("punkt")
 
 
-# Download NLTK data
-nltk.download("punkt", quiet=True)
-nltk.download("stopwords", quiet=True)
-nltk.download("movie_reviews", quiet=True)
+# -----------------------------
+# Dataset
+# -----------------------------
+class SSTDataset(Dataset):
+    def __init__(self, data, vocab, max_len=50):
+        self.data = data
+        self.vocab = vocab
+        self.max_len = max_len
 
-# ──────────────────────────────────────────────
-# ARGPARSE
-# ──────────────────────────────────────────────
-
-
-def get_args():
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--model", choices=["rnn", "birnn"], default="birnn")
-    parser.add_argument("--epochs", type=int, default=5)
-    parser.add_argument("--batch_size", type=int, default=32)
-    parser.add_argument("--lr", type=float, default=1e-3)
-    parser.add_argument("--embed_dim", type=int, default=64)
-    parser.add_argument("--hidden_dim", type=int, default=128)
-    parser.add_argument("--max_vocab", type=int, default=10000)
-    parser.add_argument("--max_len", type=int, default=200)
-    parser.add_argument("--seed", type=int, default=42)
-    parser.add_argument("--predict", action="store_true")
-    parser.add_argument("--text", type=str, default=None)
-    return parser.parse_args()
-
-
-# ──────────────────────────────────────────────
-# TEXT PREPROCESSING
-# ──────────────────────────────────────────────
-
-STOP_WORDS = set(stopwords.words("english"))
-
-
-def preprocess(text):
-    text = text.lower()
-    tokens = word_tokenize(text)
-    tokens = [t for t in tokens if t not in string.punctuation]
-    tokens = [t for t in tokens if t not in STOP_WORDS]
-    return tokens
-
-
-# ──────────────────────────────────────────────
-# VOCABULARY
-# ──────────────────────────────────────────────
-
-PAD, UNK = "<PAD>", "<UNK>"
-
-
-class Vocabulary:
-    def __init__(self, max_size=10000):
-        self.w2i = {PAD: 0, UNK: 1}
-        self.i2w = {0: PAD, 1: UNK}
-        self.max_size = max_size
-
-    def build(self, token_lists):
-        counter = Counter(t for tokens in token_lists for t in tokens)
-
-        for word, _ in counter.most_common(self.max_size - 2):
-            idx = len(self.w2i)
-            self.w2i[word] = idx
-            self.i2w[idx] = word
-
-        print(f"Vocabulary built: {len(self.w2i):,} tokens")
-        return self
-
-    def encode(self, tokens):
-        return [self.w2i.get(t, 1) for t in tokens]
+    def encode(self, text):
+        tokens = word_tokenize(text.lower())[: self.max_len]
+        ids = [self.vocab.get(tok, self.vocab["<unk>"]) for tok in tokens]
+        return torch.tensor(ids)
 
     def __len__(self):
-        return len(self.w2i)
-
-
-# ──────────────────────────────────────────────
-# DATASET
-# ──────────────────────────────────────────────
-
-
-class SentimentDataset(Dataset):
-    def __init__(self, texts, labels, vocab, max_len=200):
-        self.samples = []
-
-        for text, label in zip(texts, labels):
-            ids = vocab.encode(preprocess(text))[:max_len]
-
-            if len(ids) == 0:
-                ids = [1]
-
-            self.samples.append((torch.tensor(ids), torch.tensor(label)))
-
-    def __len__(self):
-        return len(self.samples)
+        return len(self.data)
 
     def __getitem__(self, idx):
-        return self.samples[idx]
+        item = self.data[idx]
+        return self.encode(item["text"]), item["label"]
 
 
 def collate_fn(batch):
-    seqs, labels = zip(*batch)
-
-    lengths = torch.tensor([len(s) for s in seqs])
-    padded = pad_sequence(seqs, batch_first=True, padding_value=0)
-
-    return padded, lengths, torch.stack(labels)
+    texts, labels = zip(*batch)
+    lengths = torch.tensor([len(t) for t in texts])
+    texts = nn.utils.rnn.pad_sequence(texts, batch_first=True)
+    return texts, lengths, torch.tensor(labels)
 
 
-# ──────────────────────────────────────────────
-# LOAD DATA
-# ──────────────────────────────────────────────
+# -----------------------------
+# Vocabulary + GloVe
+# -----------------------------
+def build_vocab(dataset, max_size=10000):
+    counter = Counter()
+    for item in dataset:
+        tokens = word_tokenize(item["text"].lower())
+        counter.update(tokens)
+
+    vocab = {"<pad>": 0, "<unk>": 1}
+    for i, (word, _) in enumerate(counter.most_common(max_size - 2), start=2):
+        vocab[word] = i
+    return vocab
 
 
-def load_data(seed=42):
-    pos_ids = movie_reviews.fileids("pos")
-    neg_ids = movie_reviews.fileids("neg")
+def load_glove_embeddings(vocab, embed_dim=100):
+    print("Loading GloVe via gensim...")
+    glove = api.load(f"glove-wiki-gigaword-{embed_dim}")
 
-    texts = [movie_reviews.raw(fid) for fid in pos_ids + neg_ids]
-    labels = [1] * len(pos_ids) + [0] * len(neg_ids)
+    embeddings = torch.randn(len(vocab), embed_dim)
 
-    combined = list(zip(texts, labels))
-    random.seed(seed)
-    random.shuffle(combined)
+    for word, idx in vocab.items():
+        if word in glove:
+            embeddings[idx] = torch.tensor(glove[word])
 
-    texts, labels = zip(*combined)
-
-    split = int(0.8 * len(texts))
-
-    return (list(texts[:split]), list(labels[:split]), list(texts[split:]), list(labels[split:]))
+    return embeddings
 
 
-# ──────────────────────────────────────────────
-# MODELS
-# ──────────────────────────────────────────────
-
-
-class RNNClassifier(nn.Module):
-    def __init__(self, vocab_size, embed_dim, hidden_dim):
+# -----------------------------
+# Models (with Dropout)
+# -----------------------------
+class RNNModel(nn.Module):
+    def __init__(self, vocab_size, embed_dim, hidden_dim, num_classes, embeddings=None):
         super().__init__()
-
         self.embedding = nn.Embedding(vocab_size, embed_dim, padding_idx=0)
+        if embeddings is not None:
+            self.embedding.weight.data.copy_(embeddings)
+
         self.rnn = nn.RNN(embed_dim, hidden_dim, batch_first=True)
-        self.dropout = nn.Dropout(0.3)
-        self.fc = nn.Linear(hidden_dim, 2)
+        self.dropout = nn.Dropout(0.5)
+        self.fc = nn.Linear(hidden_dim, num_classes)
 
     def forward(self, x, lengths):
-        emb = self.dropout(self.embedding(x))
-        _, hidden = self.rnn(emb)
+        x = self.embedding(x)
+        packed = nn.utils.rnn.pack_padded_sequence(x, lengths.cpu(), batch_first=True, enforce_sorted=False)
+        _, hidden = self.rnn(packed)
+        hidden = self.dropout(hidden.squeeze(0))
+        return self.fc(hidden)
 
-        out = self.fc(self.dropout(hidden.squeeze(0)))
 
-        return out
-
-
-class BiRNNClassifier(nn.Module):
-    def __init__(self, vocab_size, embed_dim, hidden_dim):
+class BiRNNModel(nn.Module):
+    def __init__(self, vocab_size, embed_dim, hidden_dim, num_classes, embeddings=None):
         super().__init__()
-
         self.embedding = nn.Embedding(vocab_size, embed_dim, padding_idx=0)
+        if embeddings is not None:
+            self.embedding.weight.data.copy_(embeddings)
 
         self.rnn = nn.RNN(embed_dim, hidden_dim, batch_first=True, bidirectional=True)
-
-        self.dropout = nn.Dropout(0.3)
-
-        self.fc = nn.Linear(hidden_dim * 2, 2)
+        self.dropout = nn.Dropout(0.5)
+        self.fc = nn.Linear(hidden_dim * 2, num_classes)
 
     def forward(self, x, lengths):
-        emb = self.dropout(self.embedding(x))
-
-        _, hidden = self.rnn(emb)
-
-        out = torch.cat([hidden[0], hidden[1]], dim=-1)
-
-        out = self.fc(self.dropout(out))
-
-        return out
+        x = self.embedding(x)
+        packed = nn.utils.rnn.pack_padded_sequence(x, lengths.cpu(), batch_first=True, enforce_sorted=False)
+        _, hidden = self.rnn(packed)
+        hidden = torch.cat((hidden[-2], hidden[-1]), dim=1)
+        hidden = self.dropout(hidden)
+        return self.fc(hidden)
 
 
-def build_model(args, vocab_size):
-    if args.model == "rnn":
-        return RNNClassifier(vocab_size, args.embed_dim, args.hidden_dim)
-
-    return BiRNNClassifier(vocab_size, args.embed_dim, args.hidden_dim)
-
-
-# ──────────────────────────────────────────────
-# TRAIN / EVAL
-# ──────────────────────────────────────────────
-
-
-def train_epoch(model, loader, optimizer, criterion, device):
+# -----------------------------
+# Train & Eval
+# -----------------------------
+def train(model, loader, optimizer, criterion, device):
     model.train()
+    total_loss, correct = 0, 0
 
-    total_loss, correct, n = 0, 0, 0
-
-    for padded, lengths, labels in tqdm(loader, desc="Training", leave=False):
-        padded, labels = padded.to(device), labels.to(device)
+    for x, lengths, y in loader:
+        x, y = x.to(device), y.to(device)
 
         optimizer.zero_grad()
-
-        logits = model(padded, lengths)
-
-        loss = criterion(logits, labels)
-
+        outputs = model(x, lengths)
+        loss = criterion(outputs, y)
         loss.backward()
-
-        nn.utils.clip_grad_norm_(model.parameters(), 1.0)
-
         optimizer.step()
 
-        preds = logits.argmax(1)
+        total_loss += loss.item()
+        preds = outputs.argmax(1)
+        correct += (preds == y).sum().item()
 
-        correct += (preds == labels).sum().item()
-        n += labels.size(0)
-
-        total_loss += loss.item() * labels.size(0)
-
-    return total_loss / n, correct / n
+    return total_loss / len(loader), correct / len(loader.dataset)
 
 
-def evaluate(model, loader, criterion, device):
+def evaluate(model, loader, device):
     model.eval()
-
-    total_loss, correct, n = 0, 0, 0
+    correct = 0
 
     with torch.no_grad():
-        for padded, lengths, labels in tqdm(loader, desc="Evaluating", leave=False):
-            padded, labels = padded.to(device), labels.to(device)
+        for x, lengths, y in loader:
+            x, y = x.to(device), y.to(device)
+            outputs = model(x, lengths)
+            preds = outputs.argmax(1)
+            correct += (preds == y).sum().item()
 
-            logits = model(padded, lengths)
-
-            loss = criterion(logits, labels)
-
-            preds = logits.argmax(1)
-
-            correct += (preds == labels).sum().item()
-            n += labels.size(0)
-
-            total_loss += loss.item() * labels.size(0)
-
-    return total_loss / n, correct / n
+    return correct / len(loader.dataset)
 
 
-# ──────────────────────────────────────────────
-# PREDICTION
-# ──────────────────────────────────────────────
+# -----------------------------
+# Prediction
+# -----------------------------
 
 
-def predict(text, model, vocab, device, max_len=200):
+def predict_text(model, text, vocab, device, max_len=50):
     model.eval()
-
-    tokens = preprocess(text)[:max_len]
-
-    ids = vocab.encode(tokens)
-
-    x = torch.tensor([ids]).to(device)
-
+    tokens = word_tokenize(text.lower())[:max_len]
+    ids = [vocab.get(tok, vocab["<unk>"]) for tok in tokens]
+    tensor = torch.tensor(ids).unsqueeze(0).to(device)
     lengths = torch.tensor([len(ids)])
 
     with torch.no_grad():
-        logits = model(x, lengths)
+        outputs = model(tensor, lengths)
+        pred = outputs.argmax(1).item()
 
-        probs = torch.softmax(logits, dim=-1)[0]
-
-        pred = probs.argmax().item()
-
-    label = "POSITIVE 👍" if pred == 1 else "NEGATIVE 👎"
-
-    print(f"\nText      : {text}")
-    print(f"Tokens    : {tokens}")
-    print(f"Sentiment : {label}")
-    print(f"Confidence: {probs[pred] * 100:.1f}%")
+    return pred
 
 
-# ──────────────────────────────────────────────
-# MAIN
-# ──────────────────────────────────────────────
+# -----------------------------
+# Main
+# -----------------------------
 
 
-def main():
-    args = get_args()
-
+def main(args):
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    os.makedirs("checkpoints", exist_ok=True)
 
-    random.seed(args.seed)
-    torch.manual_seed(args.seed)
+    # AUTO LOAD MODE
+    if args.predict and os.path.exists(f"checkpoints/{args.model}.pt"):
+        print("Loading existing model for inference...")
 
-    print("Loading NLTK movie_reviews corpus …")
+        with open("checkpoints/vocab.pkl", "rb") as f:
+            vocab = pickle.load(f)
 
-    train_texts, train_labels, test_texts, test_labels = load_data(args.seed)
+        if args.model == "rnn":
+            model = RNNModel(len(vocab), args.embed_dim, args.hidden_dim, 5)
+        else:
+            model = BiRNNModel(len(vocab), args.embed_dim, args.hidden_dim, 5)
 
-    print(f"Train: {len(train_texts)} | Test: {len(test_texts)}")
+        model.load_state_dict(torch.load(f"checkpoints/{args.model}.pt", map_location=device))
+        model.to(device)
 
-    print("Preprocessing & building vocabulary …")
+        pred = predict_text(model, args.predict, vocab, device)
+        labels = ["very negative", "negative", "neutral", "positive", "very positive"]
 
-    train_tokens = [preprocess(t) for t in train_texts]
-
-    vocab = Vocabulary(args.max_vocab).build(train_tokens)
-
-    checkpoint_dir = "checkpoints"
-    os.makedirs(checkpoint_dir, exist_ok=True)
-
-    checkpoint_path = os.path.join(checkpoint_dir, f"{args.model}_checkpoint.pt")
-
-    if args.predict:
-        ckpt = torch.load(checkpoint_path, map_location=device, weights_only=False)
-
-        vocab = ckpt["vocab"]
-
-        model = build_model(args, len(vocab)).to(device)
-
-        model.load_state_dict(ckpt["model_state"])
-
-        predict(args.text, model, vocab, device)
-
+        print(f"\nText: {args.predict}")
+        print(f"Prediction: {labels[pred]}")
         return
 
-    train_ds = SentimentDataset(train_texts, train_labels, vocab, args.max_len)
-    test_ds = SentimentDataset(test_texts, test_labels, vocab, args.max_len)
+    # TRAIN MODE
+    dataset = load_dataset("SetFit/sst5")
+    train_data = dataset["train"]
+    val_data = dataset["validation"]
+
+    vocab = build_vocab(train_data, args.vocab_size)
+
+    with open("checkpoints/vocab.pkl", "wb") as f:
+        pickle.dump(vocab, f)
+
+    embeddings = load_glove_embeddings(vocab, args.embed_dim)
+
+    train_ds = SSTDataset(train_data, vocab)
+    val_ds = SSTDataset(val_data, vocab)
 
     train_loader = DataLoader(train_ds, batch_size=args.batch_size, shuffle=True, collate_fn=collate_fn)
+    val_loader = DataLoader(val_ds, batch_size=args.batch_size, collate_fn=collate_fn)
 
-    test_loader = DataLoader(test_ds, batch_size=args.batch_size, shuffle=False, collate_fn=collate_fn)
+    if args.model == "rnn":
+        model = RNNModel(len(vocab), args.embed_dim, args.hidden_dim, 5, embeddings)
+        save_path = "checkpoints/rnn.pt"
+    else:
+        model = BiRNNModel(len(vocab), args.embed_dim, args.hidden_dim, 5, embeddings)
+        save_path = "checkpoints/birnn.pt"
 
-    model = build_model(args, len(vocab)).to(device)
+    model.to(device)
+
+    # Class weights (FIXES bias issue)
+    labels = [item["label"] for item in train_data]
+    counts = Counter(labels)
+    weights = torch.tensor([1.0 / counts[i] for i in range(5)])
+    weights = weights / weights.sum()
 
     optimizer = torch.optim.Adam(model.parameters(), lr=args.lr)
+    criterion = nn.CrossEntropyLoss(weight=weights.to(device))
 
-    criterion = nn.CrossEntropyLoss()
+    for epoch in range(args.epochs):
+        train_loss, train_acc = train(model, train_loader, optimizer, criterion, device)
+        val_acc = evaluate(model, val_loader, device)
 
-    print(f"\nModel : {args.model.upper()}  |  Device: {device}")
+        print(f"Epoch {epoch + 1} | Loss {train_loss:.3f} | Train Acc {train_acc:.3f} | Val Acc {val_acc:.3f}")
 
-    best_acc = 0
-
-    for epoch in range(1, args.epochs + 1):
-        tr_loss, tr_acc = train_epoch(model, train_loader, optimizer, criterion, device)
-
-        te_loss, te_acc = evaluate(model, test_loader, criterion, device)
-
-        marker = ""
-
-        if te_acc > best_acc:
-            best_acc = te_acc
-
-            torch.save({"model_state": model.state_dict(), "vocab": vocab}, checkpoint_path)
-
-            marker = " ✓ saved"
-
-        print(
-            f"Epoch {epoch}/{args.epochs} | "
-            f"Train loss {tr_loss:.3f} acc {tr_acc:.3f} | "
-            f"Test loss {te_loss:.3f} acc {te_acc:.3f}{marker}"
-        )
-
-    print(f"\nBest test accuracy: {best_acc * 100:.1f}%")
-    print(f"Checkpoint saved to: {checkpoint_path}")
-
-    demo = "The film was surprisingly good — great performances!"
-
-    print("\n--- Quick demo ---")
-
-    predict(demo, model, vocab, device)
+    torch.save(model.state_dict(), save_path)
+    print(f"Model saved to {save_path}")
 
 
 if __name__ == "__main__":
-    main()
+    parser = argparse.ArgumentParser()
+
+    parser.add_argument("--model", choices=["rnn", "birnn"], default="rnn")
+    parser.add_argument("--epochs", type=int, default=5)
+    parser.add_argument("--batch_size", type=int, default=32)
+    parser.add_argument("--embed_dim", type=int, default=100)
+    parser.add_argument("--hidden_dim", type=int, default=128)
+    parser.add_argument("--lr", type=float, default=1e-3)
+    parser.add_argument("--vocab_size", type=int, default=10000)
+    parser.add_argument("--predict", type=str, default=None)
+
+    args = parser.parse_args()
+    main(args)
