@@ -1,12 +1,12 @@
 # Sentiment Classification with RNN in PyTorch
 
-A PyTorch implementation of sentiment classification using Recurrent Neural Networks (RNN) and Bidirectional RNN (BiRNN) models. This project trains on the NLTK movie reviews dataset to classify text as positive or negative sentiment.
+A PyTorch implementation of sentiment classification using Recurrent Neural Networks (RNN) and Bidirectional RNN (BiRNN) models. This project trains on the SST-5 movie reviews dataset to classify text as very negative, negative, neutral, positive, very positive.
 
 ## Features
 
 - **Two Model Architectures**: Simple RNN and Bidirectional RNN for sentiment analysis
 - **Automatic Vocabulary Building**: Creates vocabulary from training data with configurable max size
-- **Text Preprocessing**: Tokenization, stopword removal, and punctuation filtering
+- **Text Preprocessing**: Tokenization, and punctuation filtering
 - **Training and Evaluation**: Complete training pipeline with validation
 - **Prediction Mode**: Classify sentiment of custom text inputs
 - **Checkpoint Saving**: Automatically saves best performing models
@@ -16,16 +16,12 @@ A PyTorch implementation of sentiment classification using Recurrent Neural Netw
 
 1. Clone or download this repository
     ```bash
-    git clone https://github.com/bhatishan2003/Sentiment Classification with RNN in PyTorch.git
-    cd Sentiment Classification with RNN in PyTorch
+    git clone https://github.com/bhatishan2003/Sentiment-Classification-with-RNN-in-Pytorch.git
+    cd Sentiment-Classification-with-RNN-in-Pytorch
     ```
 1. Install dependencies:
     ```bash
     pip install -r requirements.txt
-    ```
-1. Run the installation script to download additional NLTK data:
-    ```bash
-    python install.py
     ```
 
 ## Usage
@@ -46,19 +42,36 @@ python sentiment_classifier.py --model birnn --epochs 20 --batch_size 64 --lr 0.
 
 ### Making Predictions
 
-Predict sentiment on custom text using a trained model:
+## 🔮 Making Predictions
+
+You can predict sentiment on custom text using a trained model.
+
+### ▶️ Run Prediction
+
+Using **RNN**:
 
 ```bash
-python sentiment_classifier.py --model rnn --predict --text "This movie was absolutely fantastic!"
+python sentiment_classifier.py --model rnn --predict "This movie was absolutely fantastic!"
 ```
 
-Example output:
+```
+Loading existing model for inference...
+
+Text: lord of the rings is one of the greatest films ever
+Prediction: positive
+```
+
+Using **BIRNN**:
+
+```bash
+python sentiment_classifier.py --model birnn --predict "This movie was absolutely fantastic!"
+```
 
 ```
-Text      : This movie was absolutely fantastic!
-Tokens    : ['movie', 'absolutely', 'fantastic']
-Sentiment : POSITIVE 👍
-Confidence: 94.2%
+Loading existing model for inference...
+
+Text: This movie was absolutely fantastic!
+Prediction: very positive
 ```
 
 ## Development Notes
