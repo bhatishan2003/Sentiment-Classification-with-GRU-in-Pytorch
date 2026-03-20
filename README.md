@@ -83,7 +83,7 @@ python .\sentiment_classifier.py  --model rnn --predict "This movie was normal. 
 Using **BiRNN**
 
 ```bash
-python sentiment_classifier.py --model birnn --predict "This film was terrible." --embed_strategy glove_frozen
+python sentiment_classifier.py --model birnn --predict "This movie was absolutely fantastic!."
 ```
 
 ```
