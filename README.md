@@ -125,25 +125,19 @@ python sentiment_classifier.py --model birnn --predict "This film was terrible."
 #### Training Curves
 
 **BiRNN GloVe Finetuned Dim100**
-![BiRNN GloVe Finetuned Dim100](plots/birnn_glove_finetuned_dim100_curves.png)
+![BiRNN GloVe Finetuned Dim100](assets/birnn_glove_finetuned_dim100_curves.png)
 
 **BiRNN GloVe Finetuned Dim100 OOV Random**
-![BiRNN GloVe Finetuned Dim100 OOV Random](plots/birnn_glove_finetuned_dim100_oov_random_curves.png)
+![BiRNN GloVe Finetuned Dim100 OOV Random](assets/birnn_glove_finetuned_dim100_oov_random_curves.png)
 
 **BiRNN GloVe Finetuned Dim100 OOV Zero**
-![BiRNN GloVe Finetuned Dim100 OOV Zero](plots/birnn_glove_finetuned_dim100_oov_zero_curves.png)
+![BiRNN GloVe Finetuned Dim100 OOV Zero](assets/birnn_glove_finetuned_dim100_oov_zero_curves.png)
 
 **BiRNN GloVe Frozen Dim100**
-![BiRNN GloVe Frozen Dim100](plots/birnn_glove_frozen_dim100_curves.png)
+![BiRNN GloVe Frozen Dim100](assets/birnn_glove_frozen_dim100_curves.png)
 
 **BiRNN Random Dim100**
-![BiRNN Random Dim100](plots/birnn_random_dim100_curves.png)
-
-**BiRNN Random Dim200**
-![BiRNN Random Dim200](plots/birnn_random_dim200_curves.png)
-
-**BiRNN Random Dim50**
-![BiRNN Random Dim50](plots/birnn_random_dim50_curves.png)
+![BiRNN Random Dim100](assets/birnn_random_dim100_curves.png)
 
 ## Experiment Tracking
 
