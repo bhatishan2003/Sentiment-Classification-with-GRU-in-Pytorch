@@ -70,20 +70,20 @@ Class probabilities:
 Using **BiGRU**:
 
 ```bash
-python sentiment_classifier.py --model birnn --predict "This film was terrible." --embed_strategy glove_frozen
+python sentiment_classifier.py --model bigru --predict "This is probably one of the worst films ever." --embed_dim 200 --hidden_dim 256
 ```
 
 ```
 --------------------------------------------------------
-  Text      : This movie was absolutely fantastic!
-  Predicted : VERY POSITIVE
+  Text      : This is probably one of the worst films ever.
+  Predicted : VERY NEGATIVE
 --------------------------------------------------------
   Class probabilities:
-    very negative    0.001
-    negative         0.000
-    neutral          0.003
-    positive         0.024
-    very positive    0.972  ##################################
+    very negative    0.947  #################################
+    negative         0.044  #
+    neutral          0.007
+    positive         0.002
+    very positive    0.001
 ```
 
 ## Results
