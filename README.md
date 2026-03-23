@@ -1,10 +1,10 @@
-# Sentiment Classification with RNN in PyTorch
+# Sentiment Classification with GRU in PyTorch
 
-A PyTorch implementation of sentiment classification using Recurrent Neural Networks (RNN) and Bidirectional RNN (BiRNN) models. This project trains on the SST-5 movie reviews dataset to classify text as very negative, negative, neutral, positive, very positive.
+A PyTorch implementation of sentiment classification using Recurrent Neural Networks (GRU) and Bidirectional GRU (BiGRU) models. This project trains on the SST-5 movie reviews dataset to classify text as very negative, negative, neutral, positive, very positive.
 
 ## Features
 
-- **Two Model Architectures**: Simple RNN and Bidirectional RNN for sentiment analysis
+- **Two Model Architectures**: Simple GRU and Bidirectional GRU for sentiment analysis
 - **Embedding Strategies**: Random embeddings, frozen GloVe embeddings, and fine-tuned GloVe embeddings
 - **Automatic Vocabulary Building**: Creates vocabulary from training data with configurable max size
 - **Text Preprocessing**: Tokenization, and punctuation filtering
@@ -19,8 +19,8 @@ A PyTorch implementation of sentiment classification using Recurrent Neural Netw
 
 1. Clone or download this repository
     ```bash
-    git clone https://github.com/bhatishan2003/Sentiment-Classification-with-RNN-in-Pytorch.git
-    cd Sentiment-Classification-with-RNN-in-Pytorch
+    git clone https://github.com/bhatishan2003/Sentiment-Classification-with-GRU-in-Pytorch.git
+    cd Sentiment-Classification-with-GRU-in-Pytorch
     ```
 2. Install dependencies:
     ```bash
@@ -31,113 +31,85 @@ A PyTorch implementation of sentiment classification using Recurrent Neural Netw
 
 ### Training a Model
 
-Train an RNN model for 10 epochs with default settings:
+Train an GRU model for custom hyperparameters
 
 ```bash
-python sentiment_classifier.py --model rnn --epochs 10
+python sentiment_classifier.py --model gru --epochs 15  --hidden_dim 256 --dropout 0.25 --lr 0.001 --batch_size 64 --patience 5 --embed_dim 200
 ```
 
-Train a BiRNN model with custom hyperparameters:
+Train a BiGRU model with custom hyperparameters:
 
 ```bash
-python sentiment_classifier.py --model birnn --epochs 20 --batch_size 64 --lr 0.001 --embed_dim 128 --hidden_dim 256
-```
-
-### Ablation Studies
-
-Run ablation over embedding dimensions:
-
-```bash
-python sentiment_classifier.py --model rnn --ablation_dims --epochs 10
-```
-
-Run ablation over OOV handling strategies:
-
-```bash
-python sentiment_classifier.py --model birnn --ablation_oov --epochs 10
+python sentiment_classifier.py --model bigru --epochs 20 --batch_size 64 --lr 0.001 --embed_dim 200 --hidden_dim 256
 ```
 
 ### Making Predictions
 
 You can predict sentiment on custom text using a trained model. Specify the embedding strategy to load the appropriate checkpoint.
 
-Using **RNN**:
+Using **GRU**:
 
 ```bash
-python .\sentiment_classifier.py  --model rnn --predict "This movie was normal. Not quite good"
+python sentiment_classifier.py --model gru --predict "The film was amazing" --embed_dim 200 --hidden_dim 256
 ```
 
-```
---------------------------------------------------------
-  Text      : This movie was normal. Not quite good
-  Predicted : NEUTRAL
---------------------------------------------------------
-  Class probabilities:
-    very negative    0.023
-    negative         0.094  ###
-    neutral          0.814  ############################
-    positive         0.066  ##
-    very positive    0.002
+Example output:
+
+```text
+Text      : The film was amazing
+Predicted : VERY POSITIVE
+
+Class probabilities:
+  very negative: 0.159
+  negative     : 0.125
+  neutral      : 0.140
+  positive     : 0.244
+  very positive: 0.333
 ```
 
-Using **BiRNN**
+Using **BiGRU**:
 
 ```bash
-python sentiment_classifier.py --model birnn --predict "This film was terrible." --embed_strategy glove_frozen
+python sentiment_classifier.py --model bigru --predict "This is probably one of the worst films ever." --embed_dim 200 --hidden_dim 256
 ```
 
-```
---------------------------------------------------------
-  Text      : This movie was absolutely fantastic!
-  Predicted : VERY POSITIVE
---------------------------------------------------------
-  Class probabilities:
-    very negative    0.001
-    negative         0.000
-    neutral          0.003
-    positive         0.024
-    very positive    0.972  ##################################
+Example output:
+
+```text
+Text      : This is probably one of the worst films ever.
+Predicted : VERY NEGATIVE
+
+Class probabilities:
+  very negative: 0.947
+  negative     : 0.044
+  neutral      : 0.007
+  positive     : 0.002
+  very positive: 0.001
 ```
 
 ## Results
 
-### RNN Results
+### GRU and BiGRU Results (available assets)
 
-#### Training Curves
+#### Training Curves (Dimension 200)
 
-**RNN GloVe Finetuned Dim100**
-![RNN GloVe Finetuned Dim100](assets/rnn_glove_finetuned_dim100_curves.png)
+**GRU GloVe Finetuned Dim200**
+![GRU GloVe Finetuned Dim200](assets/gru_glove_finetuned_dim200_curves.png)
 
-**RNN GloVe Finetuned Dim100 OOV Random**
-![RNN GloVe Finetuned Dim100 OOV Random](assets/rnn_glove_finetuned_dim100_oov_random_curves.png)
+**GRU GloVe Frozen Dim200**
+![GRU GloVe Frozen Dim200](assets/gru_glove_frozen_dim200_curves.png)
 
-**RNN GloVe Finetuned Dim100 OOV Zero**
-![RNN GloVe Finetuned Dim100 OOV Zero](assets/rnn_glove_finetuned_dim100_oov_zero_curves.png)
+**GRU Random Dim200**
+![GRU Random Dim200](assets/gru_random_dim200_curves.png)
 
-**RNN GloVe Frozen Dim100**
-![RNN GloVe Frozen Dim100](assets/rnn_glove_frozen_dim100_curves.png)
+**BiGRU GloVe Finetuned Dim200**
+![BiGRU GloVe Finetuned Dim200](assets/bigru_glove_finetuned_dim200_curves.png)
 
-**RNN Random Dim100**
-![RNN Random Dim100](assets/rnn_random_dim100_curves.png)
+**BiGRU GloVe Frozen Dim200**
+![BiGRU GloVe Frozen Dim200](assets/bigru_glove_frozen_dim200_curves.png)
 
-### BiRNN Results
-
-#### Training Curves
-
-**BiRNN GloVe Finetuned Dim100**
-![BiRNN GloVe Finetuned Dim100](assets/birnn_glove_finetuned_dim100_curves.png)
-
-**BiRNN GloVe Finetuned Dim100 OOV Random**
-![BiRNN GloVe Finetuned Dim100 OOV Random](assets/birnn_glove_finetuned_dim100_oov_random_curves.png)
-
-**BiRNN GloVe Finetuned Dim100 OOV Zero**
-![BiRNN GloVe Finetuned Dim100 OOV Zero](assets/birnn_glove_finetuned_dim100_oov_zero_curves.png)
-
-**BiRNN GloVe Frozen Dim100**
-![BiRNN GloVe Frozen Dim100](assets/birnn_glove_frozen_dim100_curves.png)
-
-**BiRNN Random Dim100**
-![BiRNN Random Dim100](assets/birnn_random_dim100_curves.png)
+**BiGRU Random Dim200**
+![BiGRU Random Dim200](assets/bigru_random_dim200_curves.png)
 
 ## Experiment Tracking
 
