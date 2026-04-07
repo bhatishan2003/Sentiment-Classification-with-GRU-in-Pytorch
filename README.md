@@ -1,6 +1,6 @@
-# Sentiment Classification with GRU in PyTorch
+# Human Sentinment Classification (NLP)
 
-A PyTorch implementation of sentiment classification using Recurrent Neural Networks (GRU) and Bidirectional GRU (BiGRU) models. This project trains on the SST-5 movie reviews dataset to classify text as very negative, negative, neutral, positive, very positive.
+A PyTorch implementation of sentiment classification using Recurrent Neural Networks (GRU) and Bidirectional GRU (BiGRU) models. This project trains on the SST-5 movie reviews dataset to classify text as "very negative", negative, neutral, positive, and "very positive".
 
 ## Features
 
